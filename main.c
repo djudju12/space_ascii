@@ -28,7 +28,6 @@ typedef struct {
     bool shooting;
     struct Projectile laser;
     int lifes;
-    float death_state;
 } Entity;
 
 #define ENEMY_COLS     11
@@ -142,7 +141,7 @@ void update() {
     }
 
     game.map[player.y][player.x - 1] = '-';
-    game.map[player.y][player.x] = '^';
+    game.map[player.y][player.x    ] = '^';
     game.map[player.y][player.x + 1] = '-';
 
     double dt = get_delta_time();
@@ -159,29 +158,15 @@ void update() {
 
     for (int i = 0; i < ENEMY_COLS*ENEMY_ROWS; i++) {
         Entity *enemy = &game.enemies[i];
-        if (player.shooting && (int) player.laser.y == enemy->y && player.laser.x == enemy->x) {
+        if (player.shooting && (int) player.laser.y == enemy->y && player.laser.x == enemy->x && enemy->lifes > 0) {
             enemy->lifes -= 1;
             game.score += 1;
             player.shooting = false;
-            enemy->death_state = 0;
             player.laser.y = 0.0;
         }
 
-        char enemy_body = '@';
-        if (enemy->lifes > 0) {
-            if (game.enemy_step_acc > 0.5) enemy->x += game.enemies_direction;
-        } else {
-            enemy->death_state = enemy->death_state + dt;
-            if (enemy->death_state > 1.0) {
-                enemy->death_state = 1.0;
-            }
-
-            if (enemy->death_state > 0.75) enemy_body = ' ';
-            else if (enemy->death_state > 0.50) enemy_body = 'X';
-            else if (enemy->death_state > 0.25) enemy_body = 'O';
-            else enemy->death_state = '*';
-        }
-
+        if (game.enemy_step_acc > 0.5) enemy->x += game.enemies_direction;
+        char enemy_body = enemy->lifes > 0 ? '@': ' ';
         game.map[enemy->y][enemy->x] = enemy_body;
     }
 
@@ -216,15 +201,6 @@ void draw() {
     }
 
     printf(" SCORE: %d\n", game.score);
-    for (int j = 0; j < ENEMY_ROWS; j++) {
-        for (int i = 0; i < ENEMY_COLS; i++) {
-            Entity enemy = game.enemies[i + j*ENEMY_COLS];
-            // if (enemy.death_state > 0) {
-            //     printf("%lf ", enemy.death_state);
-            // }
-        }
-        printf("\n");
-    }
 }
 
 int main(void) {
