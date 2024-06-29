@@ -47,6 +47,8 @@ struct Game {
 };
 
 struct Game game = {0};
+
+#define PLAYER_MAX_LIFES 3
 Entity player    = {0};
 
 void game_init() {
@@ -54,7 +56,8 @@ void game_init() {
     game.fds.events = POLLIN;
     game.score = 0;
     player.x = WIDTH/2;
-    player.y = HEIGHT - 1;
+    player.y = HEIGHT - 2;
+    player.lifes = PLAYER_MAX_LIFES;
     game.enemies_direction = 1;
     srand(time(NULL));
 
@@ -205,10 +208,17 @@ void update() {
         }
 
         if (enemy->shooting) {
-            if (HIT_TARGET(*enemy, player)) {
+            if ((int) enemy->laser.y == player.y &&
+                (
+                    enemy->laser.x == player.x       ||
+                    enemy->laser.x == (player.x - 1) ||
+                    enemy->laser.x == (player.x + 1)
+                ))
+            {
+                player.lifes = player.lifes - 1;
                 enemy->shooting = false;
                 enemy->laser.y = 0.0;
-                player.lifes -= 1;
+                game.over = player.lifes == 0;
             } else {
                 update_projectile(enemy, dt, '.');
             }
@@ -256,7 +266,17 @@ void draw() {
         printf("\n");
     }
 
-    printf(" SCORE: %d\n", game.score);
+    printf("SCORE: %d\t", game.score);
+    printf("LIFES: ", player.lifes);
+    for (int i = 1; i <= PLAYER_MAX_LIFES; i++) {
+        if (player.lifes >= i) {
+            printf("♡ ");
+        } else {
+            printf("x ");
+        }
+    }
+
+    printf("\n");
 }
 
 int main(void) {
