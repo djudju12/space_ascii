@@ -56,6 +56,7 @@ void game_init() {
     player.x = WIDTH/2;
     player.y = HEIGHT - 1;
     game.enemies_direction = 1;
+    srand(time(NULL));
 
     const int x0 = 4;
     const int y0 = 2;
@@ -108,6 +109,51 @@ int has_input(void) {
     return poll(&game.fds, 1, 0);
 }
 
+// 1 = shoot up, -1 = shoot down
+void shoot(Entity *entity, int direction) {
+    const int vel_projectile = 8;
+    entity->shooting = true;
+    entity->laser.x = entity->x;
+    entity->laser.y = entity->y - direction;
+    entity->laser.vel_y = vel_projectile*direction;
+}
+
+void update_projectile(Entity *entity, double dt, char sprite) {
+    entity->laser.y = entity->laser.y - entity->laser.vel_y*dt;
+    int laser_y = entity->laser.y;
+    game.map[laser_y][entity->laser.x] = sprite;
+    const int max_y = entity->laser.vel_y > 0 ? 0 : HEIGHT - 1;
+    if ((max_y == 0          && entity->laser.y < max_y) || // projectile going up
+        (max_y == HEIGHT - 1 && entity->laser.y > max_y))   // projectile going down
+    {
+        entity->shooting = false;
+    }
+}
+
+int choose_shooter(void) {
+    int candidates[ENEMY_COLS] = {0};
+    int cnt = 0;
+
+    for (int y = ENEMY_ROWS - 1; y >= 0; y--) {
+        for (int x = 0; x < ENEMY_COLS; x++) {
+            int i = x + y*ENEMY_COLS;
+            if (game.enemies[i].lifes > 0) {
+                candidates[cnt++] = i;
+            }
+        }
+
+        if (cnt > 0) break;
+    }
+
+    return candidates[rand() % cnt];
+}
+
+#define HIT_TARGET(shooter, victim)          \
+    (shooter).shooting                    && \
+    (int) (shooter).laser.y == (victim).y && \
+    (shooter).laser.x == (victim).x       && \
+    (victim).lifes > 0
+
 void update() {
     char c;
     if (has_input()) {
@@ -123,10 +169,7 @@ void update() {
 
             case ' ': {
                 if (!player.shooting) {
-                    player.shooting = true;
-                    player.laser.x = player.x;
-                    player.laser.y = player.y - 1;
-                    player.laser.vel_y = 8;
+                    shoot(&player, 1);
                 }
             } break;
 
@@ -148,26 +191,39 @@ void update() {
     game.enemy_step_acc += dt;
     game.last_frame = get_time_sec();
     if (player.shooting) {
-        player.laser.y = player.laser.y - player.laser.vel_y*dt;
-        int laser_y = player.laser.y;
-        game.map[laser_y][player.laser.x] = '*';
-        if (player.laser.y < 0) {
-            player.shooting = false;
-        }
+        update_projectile(&player, dt, '*');
     }
 
+    bool is_time_to_shoot = true;
     for (int i = 0; i < ENEMY_COLS*ENEMY_ROWS; i++) {
         Entity *enemy = &game.enemies[i];
-        if (player.shooting && (int) player.laser.y == enemy->y && player.laser.x == enemy->x && enemy->lifes > 0) {
+        if (HIT_TARGET(player, *enemy)) {
             enemy->lifes -= 1;
             game.score += 1;
             player.shooting = false;
             player.laser.y = 0.0;
         }
 
+        if (enemy->shooting) {
+            if (HIT_TARGET(*enemy, player)) {
+                enemy->shooting = false;
+                enemy->laser.y = 0.0;
+                player.lifes -= 1;
+            } else {
+                update_projectile(enemy, dt, '.');
+            }
+
+            is_time_to_shoot = false;
+        }
+
         if (game.enemy_step_acc > 0.5) enemy->x += game.enemies_direction;
-        char enemy_body = enemy->lifes > 0 ? '@': ' ';
+        char enemy_body = enemy->lifes > 0 ? '@' : ' ';
         game.map[enemy->y][enemy->x] = enemy_body;
+    }
+
+    if (is_time_to_shoot) {
+        int i_random_enemy = choose_shooter();
+        shoot(&game.enemies[i_random_enemy], -1);
     }
 
     if (game.enemy_step_acc > 0.5) {
